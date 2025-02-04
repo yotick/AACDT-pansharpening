@@ -25,15 +25,15 @@ from resize_images import resize_images
 """
 Analyzed image choice
 """
-# sensor = 'WV3'
+sensor = 'WV3'
 # im_tag = 'NY1'
 
 # sensor = 'GeoEye1'
-# im_tag = 'GeoEye1_May'
-
-sensor = 'IKONOS'
-im_tag = 'Toulouse'
-
+im_tag = 'GeoEye1_May'
+#
+# sensor = 'IKONOS'
+# im_tag = 'Toulouse'
+#
 """ Quality Index Blocks """
 Qblocks_size = 32
 
@@ -58,6 +58,7 @@ ratio = 4
 L = 11
 
 """ Dataset load """
+
 if (im_tag == 'NY1'):
     mat = scipy.io.loadmat('NY1_WV3_FR.mat')
     I_MS_LR = mat.get('I_MS_LR')

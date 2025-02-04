@@ -49,8 +49,6 @@ I_MS_LR = I_MS_LR.astype('float64')
 """ Load MATLAB results """
 matRes = scipy.io.loadmat("results_" + dataset + ".mat")
 
-
-
 """ Let's take some examples ..."""
 
 

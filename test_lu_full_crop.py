@@ -7,7 +7,7 @@ from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from data_set_py.data_utils_Full import TestDatasetFromFolder_Full
 # from data import get_test_set
-from models.multi_branch import MainNet  ################ need to change ######################
+from models.IACDT_model import MainNet  ################ need to change ######################
 # sys.path.append('E:\\remote sense image fusion\\shared_py')
 # from data_set_py.save_image_func import save_image_full
 import time

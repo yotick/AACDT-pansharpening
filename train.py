@@ -23,7 +23,7 @@ from data_set_py.data_utils_RS_2 import TrainDatasetFromFolder, ValDatasetFromFo
 ########### change here ################
 # from models.model_8_mod_stage1_2 import UNet_level3
 # from models.model_8_mod_Unet import Unet
-from models.multi_branch import MainNet  ##   need to change here   #########
+from models.IACDT_model import MainNet  ##   need to change here   #########
 from loss.vgg_perceptual_loss import VGGPerceptualLoss, VGG19
 from loss.spatial_loss import Spatial_Loss
 # from models.model_4_mod_stage1 import Generator
@@ -37,10 +37,10 @@ from torch.nn import functional as FC
 # import pytorch_msssim.ssim as ssim
 import cv2
 import thop
-from helpers import initialize_weights, initialize_weights_new, to_variable, make_patches
-
-# from skimage.metrics import structural_similarity as ssim
-from helpers import make_patches
+# from helpers import initialize_weights, initialize_weights_new, to_variable, make_patches
+#
+# # from skimage.metrics import structural_similarity as ssim
+# from helpers import make_patches
 
 # from loss import uiqi_loss
 

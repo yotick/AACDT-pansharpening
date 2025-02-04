@@ -28,16 +28,18 @@ All rights reserved. This work should only be used for nonprofit purposes.
 """
 
 import numpy as np
-from tools import fir_filter_wind, gaussian2d, kaiser2d
+from Pansharpening_Toolbox_Assessment_Python.tools import fir_filter_wind, gaussian2d, kaiser2d
 
 def genMTF(ratio, sensor, nbands):
     
     N = 41
         
     if sensor=='QB':
-        GNyq = np.asarray([0.34, 0.32, 0.30, 0.22],dtype='float32')    # Band Order: B,G,R,NIR
+        # GNyq = np.asarray([0.34, 0.32, 0.30, 0.22],dtype='float32')    # Band Order: B,G,R,NIR
+        GNyq = np.asarray([0.30, 0.32, 0.34, 0.22], dtype='float32')  # Band Order: RGB,NIR
     elif sensor=='IKONOS':
         GNyq = np.asarray([0.26,0.28,0.29,0.28],dtype='float32')    # Band Order: B,G,R,NIR
+        GNyq = np.asarray([0.29, 0.28, 0.26, 0.28], dtype='float32')  # Band Order: RGB,NIR
     elif sensor=='GeoEye1' or sensor=='WV4':
         GNyq = np.asarray([0.23,0.23,0.23,0.23],dtype='float32')    # Band Order: B,G,R,NIR
     elif sensor=='WV2':

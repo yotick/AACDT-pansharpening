@@ -6,17 +6,18 @@ from torch.utils.data.dataset import Dataset
 from torchvision.transforms import Compose, RandomCrop, ToTensor, ToPILImage, CenterCrop, Resize, Grayscale
 
 # from general import histMatch
-from  data_set_py.imagecrop import FusionRandomCrop
+from data_set_py.imagecrop import FusionRandomCrop
 from torchvision.transforms import functional as F
 import numpy as np
 from data_set_py.transforms import Stretch
 from torch.nn import functional as FC
+from Pansharpening_Toolbox_Assessment_Python.MTF import lu_MTF
+
 
 def data_transform():
     # return Compose([ToTensor(), Stretch()])
     return Compose([Stretch()])
 
-3
 
 def is_image_file(filename):
     return any(filename.endswith(extension) for extension in
@@ -115,13 +116,15 @@ class TrainDatasetFromFolder(Dataset):
         self.lr_transform = train_lr_transform(crop_size, upscale_factor)
         self.upscale_factor = upscale_factor
         self.sate = sate
+        self.sensor = sate
 
-        if sate == 'wv3_8':           # for train datasets
+        if sate == 'wv3_8':  # for train datasets
             # pan256_path = join(dataset_dir, 'WorldView3-8\\pan256\\')
             # pan1024_path = join(dataset_dir, 'WorldView3-8\\pan1024\\')
             # ms_r_path = join(dataset_dir, 'WorldView3-8\\mul64_MTF\\')
             # target_path = join(dataset_dir, 'WorldView3-8\\gt256\\')
             # ms_r_up_path = join(dataset_dir, 'WorldView3-8\\wv3_8_up\\')
+            self.sensor = 'WV3'
 
             pan256_path = join(dataset_dir, 'data2017/DIV2K_train_HR\\train_img7\PAN\PAN256')
             pan1024_path = join(dataset_dir, 'data2017/DIV2K_train_HR\\train_img7\PAN\PAN1024')
@@ -164,7 +167,8 @@ class TrainDatasetFromFolder(Dataset):
             # self.ms_r_file_name = [join(ms_r_path, x.split('.')[0]) for x in listdir(ms_r_path) if
             #                        is_image_file(x)]
 
-        if sate == 'ik':     # for train datasets
+        if sate == 'ik':  # for train datasets
+            self.sensor = 'IKONOS'
             pan256_path = join(dataset_dir, 'data2017/DIV2K_train_HR/train_img4/PAN/PAN256')
             nir256_path = join(dataset_dir, 'data2017/DIV2K_train_HR/train_img4/NIR/NIR256')
             rgb256_path = join(dataset_dir, 'data2017/DIV2K_train_HR/train_img4/RGB/RGB256')
@@ -198,7 +202,7 @@ class TrainDatasetFromFolder(Dataset):
         # self.ms_r_up_file_name = [join(ms_r_up_path, x.split('.')[0]) for x in listdir(ms_r_up_path) if
         #                           is_image_file(x)]
 
-    def __getitem__(self, index):    # for train datasets
+    def __getitem__(self, index):  # for train datasets
         pan256 = Image.open('%s.tif' % self.pan256_file_name[index])
         rgb256 = Image.open('%s.tif' % self.rgb256_file_name[index])
         rgb64 = Image.open('%s.tif' % self.rgb64_file_name[index])
@@ -217,7 +221,7 @@ class TrainDatasetFromFolder(Dataset):
         rgb_up_crop = ToTensor()(F.crop(rgb_up, crop_size[0], crop_size[1], crop_size[2], crop_size[3]))
         rgb_near_crop = ToTensor()(F.crop(rgb_up_near, crop_size[0], crop_size[1], crop_size[2], crop_size[3]))
 
-        if self.sate == 'pl' or self.sate == 'ik':   # for train datasets
+        if self.sate == 'pl' or self.sate == 'ik':  # for train datasets
             nir256 = Image.open('%s.tif' % self.nir256_file_name[index])
             nir64 = Image.open('%s.tif' % self.nir64_file_name[index])
             nir_up = nir64.resize((256, 256), Image.BICUBIC)
@@ -233,7 +237,7 @@ class TrainDatasetFromFolder(Dataset):
             ms_near_crop = torch.cat([rgb_near_crop, nir_near_crop])
             # ms_64 = torch.cat([rgb64_t, nir64_t])
 
-        if self.sate == 'wv3_8':       # for train datasets
+        if self.sate == 'wv3_8':  # for train datasets
             nir1_64 = Image.open('%s.tif' % self.nir1_64_file_name[index])
             nir2_64 = Image.open('%s.tif' % self.nir2_64_file_name[index])
             nir1_256 = Image.open('%s.tif' % self.nir1_256_file_name[index])
@@ -251,7 +255,7 @@ class TrainDatasetFromFolder(Dataset):
             yellow_up = yellow64.resize((256, 256), Image.BICUBIC)
             nir2_up = nir2_64.resize((256, 256), Image.BICUBIC)
 
-            nir1_up_near = nir1_64.resize((256, 256), Image.NEAREST)     # for train datasets
+            nir1_up_near = nir1_64.resize((256, 256), Image.NEAREST)  # for train datasets
             coastbl_up_near = coastbl64.resize((256, 256), Image.NEAREST)
             rededge_up_near = rededge64.resize((256, 256), Image.NEAREST)
             yellow_up_near = yellow64.resize((256, 256), Image.NEAREST)
@@ -291,33 +295,50 @@ class TrainDatasetFromFolder(Dataset):
         # ms_org_crop = ms_64
         # data = torch.cat([ms_gray_crop, pan_crop])
         # return ms_up_crop, detail_crop, detail_gt_crop
-        ms_near_crop_t = ms_near_crop.unsqueeze(0)
+        ms_near_crop_t = ms_near_crop.unsqueeze(0)   # in order to use FC.inter
         size_n = int(ms_near_crop.size()[1] / 4)
         ms_org_crop_t = FC.interpolate(ms_near_crop_t, size=(size_n, size_n), mode='nearest')
         ms_org_crop = ms_org_crop_t.squeeze(0)
-        return ms_up_crop, ms_org_crop, pan_crop, gt_crop
 
-    def __len__(self):     # training
+        # MTF and downsample first, then upsample.
+        ms_org_crop_n = ms_org_crop.numpy().transpose(1, 2, 0)
+        # ms_mtf = lu_MTF(ms_org_crop_n, self.sensor, 1 / 4)
+        ms_mtf_t = (ms_org_crop).unsqueeze(0).float()  ## change here ###
+        size_m = ms_mtf_t.size()[2] // 4
+        ms_mtf_d = FC.interpolate(ms_mtf_t, size=(size_m, size_m), mode='bicubic')  ###change mode here.
+        ms_d_up_t = FC.interpolate(ms_mtf_d, size=(size_n, size_n), mode='bicubic')
+        ms_d_up = ms_d_up_t.squeeze(0)
+
+        # downsampling pan image too.
+        pan_crop_t = pan_crop.unsqueeze(0)
+        pan_d = FC.interpolate(pan_crop_t, size=(size_n, size_n), mode='bicubic')
+        pan_d = pan_d.squeeze(0)
+
+
+        return ms_up_crop, ms_org_crop, pan_crop, gt_crop, ms_d_up, pan_d
+
+    def __len__(self):  # training
         # print(len(self.pan_r_file_name))
         # return len(self.pan256_file_name)
         return 2000
 
 
-class ValDatasetFromFolder(Dataset):   # for validation datasets
+class ValDatasetFromFolder(Dataset):  # for validation datasets
     def __init__(self, dataset_dir, sate, upscale_factor):
         super(ValDatasetFromFolder, self).__init__()
         self.upscale_factor = upscale_factor
         self.gray_transform = train_gray_transform()
 
         self.sate = sate
+        self.sensor = sate
 
-        if sate == 'wv3_8':    # for validation datasets
+        if sate == 'wv3_8':  # for validation datasets
             # pan256_path = join(dataset_dir, 'WorldView3-8\\pan256\\')
             # pan1024_path = join(dataset_dir, 'WorldView3-8\\pan1024\\')
             # ms_r_path = join(dataset_dir, 'WorldView3-8\\mul64_MTF\\')
             # target_path = join(dataset_dir, 'WorldView3-8\\gt256\\')
             # ms_r_up_path = join(dataset_dir, 'WorldView3-8\\wv3_8_up\\')
-
+            self.sensor = 'WV3'
             pan256_path = join(dataset_dir, 'data2017/DIV2K_valid_HR\\test_img7\PAN\PAN256')
             pan1024_path = join(dataset_dir, 'data2017/DIV2K_valid_HR\\test_img7\PAN\PAN1024')
             nir1_256_path = join(dataset_dir, 'data2017/DIV2K_valid_HR/test_img7/NIR1/NIR1256')
@@ -360,7 +381,8 @@ class ValDatasetFromFolder(Dataset):   # for validation datasets
             # self.ms_r_file_name = [join(ms_r_path, x.split('.')[0]) for x in listdir(ms_r_path) if
             #                        is_image_file(x)]
 
-        if sate == 'ik': # for validation datasets
+        if sate == 'ik':  # for validation datasets
+            self.sensor = 'IKONOS'
             pan256_path = join(dataset_dir, 'data2017/DIV2K_valid_HR/test_img4/PAN/PAN256')
             nir256_path = join(dataset_dir, 'data2017/DIV2K_valid_HR/test_img4/NIR/NIR256')
             rgb256_path = join(dataset_dir, 'data2017/DIV2K_valid_HR/test_img4/RGB/RGB256')
@@ -394,7 +416,7 @@ class ValDatasetFromFolder(Dataset):   # for validation datasets
         # self.ms_r_up_file_name = [join(ms_r_up_path, x.split('.')[0]) for x in listdir(ms_r_up_path) if
         #                           is_image_file(x)]
 
-    def __getitem__(self, index):     # for validation datasets
+    def __getitem__(self, index):  # for validation datasets
         pan256 = Image.open('%s.tif' % self.pan256_file_name[index])
         rgb256 = Image.open('%s.tif' % self.rgb256_file_name[index])
         rgb64 = Image.open('%s.tif' % self.rgb64_file_name[index])
@@ -482,15 +504,29 @@ class ValDatasetFromFolder(Dataset):   # for validation datasets
             ms_64 = torch.cat([rgb64_t, nir1_64_t, coastbl64_t, rededge64_t, yellow64_t, nir2_64_t])
         ms_org_crop = ms_64
 
-        # data = torch.cat([ms_gray_crop, pan_crop])
-        # return ms_up_crop, detail_crop, detail_gt_crop
-        return ms_up_crop, ms_org_crop, pan_crop, gt_crop
+        # MTF and downsample first, then upsample.
+        size_n = int(ms_near_crop.size()[1] / 4)
+        ms_org_crop_n = ms_org_crop.numpy().transpose(1, 2, 0)
+        # ms_mtf = lu_MTF(ms_org_crop_n, self.sensor, 1 / 4)
+        ms_mtf_t = (ms_org_crop).unsqueeze(0).float()  ## change here ##
+        size_m = ms_org_crop.size()[2] // 4
+        ms_mtf_d = FC.interpolate(ms_mtf_t, size=(size_m, size_m), mode='bicubic') ## change mode here ##
+        ms_d_up_t = FC.interpolate(ms_mtf_d, size=(size_n, size_n), mode='bicubic')
+        ms_d_up = ms_d_up_t.squeeze(0)
 
-    def __len__(self): # for validation datasets
+        # downsampling pan image too.
+        pan_crop_t = pan_crop.unsqueeze(0)
+        pan_d = FC.interpolate(pan_crop_t, size=(size_n, size_n), mode='bicubic')
+        pan_d = pan_d.squeeze(0)
+
+        return ms_up_crop, ms_org_crop, pan_crop, gt_crop, ms_d_up, pan_d
+
+
+    def __len__(self):  # for validation datasets
         return 5
 
 
-class TestDatasetFromFolder(Dataset):       # for test datasets
+class TestDatasetFromFolder(Dataset):  # for test datasets
     def __init__(self, dataset_dir, sate, upscale_factor):
         super(TestDatasetFromFolder, self).__init__()
         self.upscale_factor = upscale_factor
@@ -558,7 +594,7 @@ class TestDatasetFromFolder(Dataset):       # for test datasets
             self.nir64_file_name = [join(nir64_path, x.split('.')[0]) for x in listdir(nir64_path) if is_image_file(x)]
             self.nir256_file_name = [join(nir256_path, x.split('.')[0]) for x in listdir(nir256_path) if
                                      is_image_file(x)]
-        if sate == 'pl':      # for test datasets
+        if sate == 'pl':  # for test datasets
             pan256_path = join(dataset_dir, 'data2017/DIV2K_valid_HR/test_img3/PAN/PAN256')
             nir256_path = join(dataset_dir, 'data2017/DIV2K_valid_HR/test_img3/NIR/NIR256')
             rgb256_path = join(dataset_dir, 'data2017/DIV2K_valid_HR/test_img3/RGB/RGB256')
@@ -673,6 +709,9 @@ class TestDatasetFromFolder(Dataset):       # for test datasets
         # return ms_up_crop, detail_crop, detail_gt_crop
         return ms_up_crop, ms_org_crop, pan_crop, gt_crop
 
+        # data = torch.cat([ms_gray_crop, pan_crop])
+        # return ms_up_crop, detail_crop, detail_gt_crop
+        return ms_up_crop, ms_org_crop, pan_crop, gt_crop
 
     def __len__(self):
         return len(self.rgb256_file_name)

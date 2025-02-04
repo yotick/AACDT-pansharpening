@@ -30,17 +30,31 @@ All rights reserved. This work should only be used for nonprofit purposes.
          G. Vivone, M. Dalla Mura, A. Garzelli, R. Restaino, G. Scarpa, M. O. Ulfarsson, L. Alparone, and J. Chanussot, "A New Benchmark Based on Recent Advances in Multispectral Pansharpening: Revisiting Pansharpening With Classical and Emerging Pansharpening Methods", IEEE Geoscience and Remote Sensing Magazine, vol. 9, no. 1, pp. 53 - 81, March 2021.           
 """
 
-import scipy
+# import scipy
+from scipy import ndimage
 import numpy as np
-from genMTF import genMTF
+from Pansharpening_Toolbox_Assessment_Python.genMTF import genMTF
 
-def MTF(I_MS,sensor,ratio):
-    
-    h = genMTF(ratio, sensor,I_MS.shape[2])
-    
+
+
+def MTF(I_MS, sensor, ratio):
+    h = genMTF(ratio, sensor, I_MS.shape[2])
+
     I_MS_LP = np.zeros((I_MS.shape))
     for ii in range(I_MS.shape[2]):
-        I_MS_LP[:,:,ii] = scipy.ndimage.filters.correlate(I_MS[:,:,ii],h[:,:,ii],mode='nearest')
+        I_MS_LP[:, :, ii] = ndimage.filters.correlate(I_MS[:, :, ii], h[:, :, ii], mode='nearest')
+        ### This can speed-up the processing, but with slightly different results with respect to the MATLAB toolbox
+        # hb = h[:,:,ii]
+        # I_MS_LP[:,:,ii] = signal.fftconvolve(I_MS[:,:,ii],hb[::-1],mode='same')
+
+    return np.double(I_MS_LP)
+
+def lu_MTF(I_MS, sensor, ratio):
+    h = genMTF(ratio, sensor, I_MS.shape[2])
+
+    I_MS_LP = np.zeros((I_MS.shape))
+    for ii in range(I_MS.shape[2]):
+        I_MS_LP[:, :, ii] = ndimage.filters.correlate(I_MS[:, :, ii], h[:, :, ii], mode='nearest')
         ### This can speed-up the processing, but with slightly different results with respect to the MATLAB toolbox
         # hb = h[:,:,ii]
         # I_MS_LP[:,:,ii] = signal.fftconvolve(I_MS[:,:,ii],hb[::-1],mode='same')
